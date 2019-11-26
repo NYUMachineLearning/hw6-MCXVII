@@ -107,4 +107,129 @@ confusionMatrix(svm_test, reference = test_classification$Class)
 
 1. Choose an appropriate machine learning dataset and use SVM with two different kernels. Campare the results. 
 
+```{r}
+# Load dataset.
+data("PimaIndiansDiabetes")
+pid <- PimaIndiansDiabetes
+
+# View dataframe structure.
+str(pid)
+# The dataframe is already numeric, so we don't need to transform.
+
+# Handle missing values
+pid[is.na(pid)] = 0
+
+# Set seed for reproducibility.
+set.seed(1117)
+
+# Separate training and test sets.
+train_size = floor(0.75 * nrow(pid))
+train_pos <- sample(seq_len(nrow(pid)), size = train_size)
+
+train_classification <- pid[train_pos, ]
+test_classification <- pid[-train_pos, ]
+```
+
+
+```{r}
+# Run SVM with linear kernel.
+set.seed(1117)
+control = trainControl(method = "repeatedcv", repeats = 5, classProbs = T, savePredictions = T)
+
+svm_linear = train(diabetes ~ .,  data = train_classification, method = "svmLinear", tuneLength = 10, trControl = control)
+svm_linear
+
+# View AUC and ROC plot.
+roc(predictor = svm_linear$pred$neg, response = svm_linear$pred$obs)$auc
+
+plot(x = roc(predictor = svm_linear$pred$neg, response = svm_linear$pred$obs)$specificities, y = roc(predictor = svm_linear$pred$neg, response = svm_linear$pred$obs)$sensitivities, col= "blue", xlim = c(1, 0), type ="l", ylab = "Sensitivity", xlab = "Specificity")
+
+# Predict on test set and view prediction results.
+linear_test = predict(svm_linear, newdata = test_classification)
+confusionMatrix(linear_test, reference = test_classification$diabetes)
+```
+
+
+```{r}
+# Run SVM with radial kernel.
+set.seed(1117)
+control = trainControl(method = "repeatedcv", repeats = 5, classProbs = T, savePredictions = T)
+
+svm_radial = train(diabetes ~ .,  data = train_classification, method = "svmRadial", tuneLength = 10, trControl = control)
+svm_radial
+
+# View AUC and ROC plot.
+roc(predictor = svm_radial$pred$neg, response = svm_radial$pred$obs)$auc
+
+plot(x = roc(predictor = svm_radial$pred$neg, response = svm_radial$pred$obs)$specificities, y = roc(predictor = svm_radial$pred$neg, response = svm_radial$pred$obs)$sensitivities, col= "blue", xlim = c(1, 0), type ="l", ylab = "Sensitivity", xlab = "Specificity")
+
+# Predict on test set and view prediction results.
+radial_test = predict(svm_radial, newdata = test_classification)
+confusionMatrix(radial_test, reference = test_classification$diabetes)
+```
+
+The SVM accuracy, AUC, and test prediction results are all better for the linear kernel (0.77, 0.83, 0.79, respectively) than the radial kernel (0.77, 0.80, 0.77, respectively). This suggests that the classification of our data is better separated by linear SVM.
+
+
 2. Attempt using SVM after using a previously covered feature selection method. Do the results improve? Explain. 
+
+```{r}
+### Step 1: Perform backward elimination feature selection on data.
+set.seed(1117)
+pid_num <- pid
+pid_num$diabetes <- as.numeric(pid_num$diabetes)
+levels(pid_num$diabetes) <- c(0,1)
+lm_allvars <- lm(diabetes ~ ., data=pid_num)
+step(lm_allvars, direction="backward")
+
+# Based on the final line of code above, we should keep age, pressure, pedigree, pregnant, mass, and glucose columns as predictors.
+
+lm_belim <- lm(diabetes ~ age + pressure + pedigree + pregnant + mass + glucose,data=pid_num)
+
+# When we view results, we see that our p-value has improved from 0.08783 to 0.05257.
+# This suggests that these variables are indeed more useful as predictors of diabetes.
+summary(lm_allvars)
+summary(lm_belim)
+
+```
+
+
+```{r}
+### Step 2a: Use SVM with linear kernel and compare.
+set.seed(1117)
+control = trainControl(method = "repeatedcv", repeats = 5, classProbs = T, savePredictions = T)
+
+svm_linear2 = train(diabetes ~ age + pressure + pedigree + pregnant + mass + glucose,  data = train_classification, method = "svmLinear", tuneLength = 10, trControl = control)
+svm_linear2
+
+# View AUC and ROC plot.
+roc(predictor = svm_linear2$pred$neg, response = svm_linear2$pred$obs)$auc
+
+plot(x = roc(predictor = svm_linear2$pred$neg, response = svm_linear2$pred$obs)$specificities, y = roc(predictor = svm_linear2$pred$neg, response = svm_linear2$pred$obs)$sensitivities, col= "blue", xlim = c(1, 0), type ="l", ylab = "Sensitivity", xlab = "Specificity")
+
+# Predict on test set and view prediction results.
+linear2_test = predict(svm_linear2, newdata = test_classification)
+confusionMatrix(linear2_test, reference = test_classification$diabetes)
+
+```
+
+
+```{r}
+### Step 2b: Use SVM with radial kernel and compare.
+set.seed(1117)
+control = trainControl(method = "repeatedcv", repeats = 5, classProbs = T, savePredictions = T)
+
+svm_radial2 = train(diabetes ~ age + pressure + pedigree + pregnant + mass + glucose,  data = train_classification, method = "svmRadial", tuneLength = 10, trControl = control)
+svm_radial2
+
+# View AUC and ROC plot.
+roc(predictor = svm_radial2$pred$neg, response = svm_radial2$pred$obs)$auc
+
+plot(x = roc(predictor = svm_radial2$pred$neg, response = svm_radial2$pred$obs)$specificities, y = roc(predictor = svm_radial2$pred$neg, response = svm_radial2$pred$obs)$sensitivities, col= "blue", xlim = c(1, 0), type ="l", ylab = "Sensitivity", xlab = "Specificity")
+
+# Predict on test set and view prediction results.
+radial2_test = predict(svm_radial2, newdata = test_classification)
+confusionMatrix(radial2_test, reference = test_classification$diabetes)
+```
+
+I used backward elimination for feature selection and removed 2 of the least useful variables for predicting diabetes. The SVM accuracy, AUC, and test prediction results are very similar for both the original linear kernel model (0.77, 0.83, 0.79, respectively) and the linear kernel model after feature selection (0.77, 0.83, 0.78, respectively). The same is true for the original radial kernel model (0.77, 0.80, 0.77, respectively) and the radial kernel model after feature selection (0.78, 0.80, 0.75, respectively). The results are similar enough that a change in seed could change whether feature selection does better or worse. However, feature selection is generally unnecessary for SVM because SVM already has an optimization parameter that assigns appropriate weights to each of the variables. By removing variables, we cause SVM to overfit, since the weights that would have been on the removed variable are assigned/distributed among the rest. Removing 2 of 8 predictor variables may not have had an enormous effect on the SVM model, but removing 6 of 8 predictor variables would very likely worsen the model.
